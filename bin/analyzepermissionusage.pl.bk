@@ -1,0 +1,180 @@
+#!/usr/bin/perl
+
+$foundseedfile = "permissionstringusage";
+$calltablefile = "callgraph";
+
+# 1 = check permission
+# 2 = check calling
+# 3 = perm required to receive
+# 4 = perm required to send
+%knownPermissionCheck = (
+	"<android.content.Context: int checkPermission(java.lang.String,int,int)>", 1,
+	"<android.content.Context: int checkCallingPermission(java.lang.String)>", 2,
+	"<android.content.Context: int checkCallingOrSelfPermission(java.lang.String)>", 2,
+	"<android.content.Context: void enforcePermission(java.lang.String,int,int,java.lang.String)>", 1,
+	"<android.content.Context: void enforceCallingPermission(java.lang.String,java.lang.String)>", 2,
+	"<android.content.Context: void enforceCallingOrSelfPermission(java.lang.String,java.lang.String)>", 2,
+	"<android.content.Context: void sendBroadcast(android.content.Intent,java.lang.String)>", 3,
+	"<android.content.Context: void sendOrderedBroadcast(android.content.Intent,java.lang.String)>", 3,
+	"<android.content.Context: void sendOrderedBroadcast(android.content.Intent,java.lang.String,android.content.BroadcastReceiver,android.os.Handler,int,java.lang.String,android.os.Bundle)>", 3,
+	"<android.content.Context: android.content.Intent registerReceiver(android.content.BroadcastReceiver,android.content.IntentFilter,java.lang.String,android.os.Handler)>", 4,
+
+	"<android.content.ContextWrapper: int checkPermission(java.lang.String,int,int)>", 1,
+	"<android.content.ContextWrapper: int checkCallingPermission(java.lang.String)>", 2,
+	"<android.content.ContextWrapper: int checkCallingOrSelfPermission(java.lang.String)>", 2,
+	"<android.content.ContextWrapper: void enforcePermission(java.lang.String,int,int,java.lang.String)>", 1,
+	"<android.content.ContextWrapper: void enforceCallingPermission(java.lang.String,java.lang.String)>", 2,
+	"<android.content.ContextWrapper: void enforceCallingOrSelfPermission(java.lang.String,java.lang.String)>", 2,
+	"<android.content.ContextWrapper: void sendBroadcast(android.content.Intent,java.lang.String)>", 3,
+	"<android.content.ContextWrapper: void sendOrderedBroadcast(android.content.Intent,java.lang.String)>", 3,
+	"<android.content.ContextWrapper: void sendOrderedBroadcast(android.content.Intent,java.lang.String,android.content.BroadcastReceiver,android.os.Handler,int,java.lang.String,android.os.Bundle)>", 3,
+	"<android.content.ContextWrapper: android.content.Intent registerReceiver(android.content.BroadcastReceiver,android.content.IntentFilter,java.lang.String,android.os.Handler)>", 4,
+
+	"<com.android.server.am.ActivityManagerService: int checkPermission(java.lang.String,int,int)>", 1,
+	"<com.android.server.am.ActivityManagerService: int checkCallingPermission(java.lang.String)>", 2,
+	"<com.android.server.am.ActivityManagerService: int checkComponentPermission(java.lang.String,int,int,int)>", 2,
+	"<com.android.server.am.ActivityManagerService: void enforceCallingPermission(java.lang.String,java.lang.String)>", 1,
+	"<com.android.server.am.ActivityManagerService: int broadcastIntentLocked(com.android.server.am.ProcessRecord,java.lang.String,android.content.Intent,java.lang.String,android.content.IIntentReceiver,int,java.lang.String,android.os.Bundle,java.lang.String,boolean,boolean,int,int)>", 3,
+	"<com.android.server.am.ActivityManagerService: int broadcastIntentLocked(com.android.server.am.ProcessRecord,java.lang.String,android.content.Intent,java.lang.String,android.content.IIntentReceiver,int,java.lang.String,android.os.Bundle,java.lang.String,boolean,boolean,int,int,int)>", 3,
+	"<android.content.pm.PackageManager: int checkPermission(java.lang.String,java.lang.String)>", 1,
+);
+
+%sinks;
+%sinktype;
+
+# find sinks with direct calls to knownPermissionCheck
+$perm;
+$method;
+$stmt;
+$invokemethod;
+$directuse;
+open FILE, "<$foundseedfile" or die $!;
+@file = <FILE>;
+close FILE;
+foreach (@file) {
+	$_ =~ s/\n//;
+	if ($_ =~ m/^PER:(.*)METHOD:(.*)STMT:(.*)NOTDIRECTUSE$/) {
+		$perm = $1;
+		$method = $2;
+		$stmt = $3;
+		$directuse = 0;
+	} elsif ($_ =~ m/^PER:(.*)METHOD:(.*)STMT:(.*)$/) {
+		$perm = $1;
+		$method = $2;
+		$stmt = $3;
+		$directuse = 1;
+	}
+	if ($stmt =~ m/invoke.*<(.*)>\(.*\)$/) {
+		$invokemethod = "<".$1.">";
+	} else {
+		next;
+	}
+	if (exists $knownPermissionCheck{$invokemethod}) {
+		$sinktype{$perm.$method} = $knownPermissionCheck{$invokemethod};
+		if (! exists $sinks{$perm}) {
+			push (@{$sinks{$perm}}, $method);
+		} elsif (! ($method ~~ @{$sinks{$perm}})) {
+			push (@{$sinks{$perm}}, $method);
+		}
+	}
+}
+
+#find sinks with indirect calls to knownPermissionCheck
+open FILE, "<".$calltablefile or die $!;
+%lookup;
+while (<FILE>) {
+	$_ =~ s/\n//;
+	if ($_ =~ /^SRC:(.*)TGT:(.*)/) {
+		$src = $1;
+		$tgt = $2; 
+		if (! exists $lookup{$src}) {
+			push (@{$lookup{$src}}, $tgt);
+		} elsif (! ($tgt ~~ @{$lookup{$src}})) {
+			push (@{$lookup{$src}}, $tgt);
+		}
+#		if ($_ =~ /virtualinvoke.*\.<(.*)>\(/) {
+#			$virtualsrc = "<".$1.">";
+#			if (! exists $lookup{$virtualsrc}) {
+#				push (@{$lookup{$virtualsrc}}, $tgt);
+#			} elsif (! ($tgt ~~ @{$lookup{$virtualsrc}})) {
+#				push (@{$lookup{$virtualsrc}}, $tgt);
+#			}			
+#		}
+	}
+}
+close(FILE);
+
+foreach (@file) {
+	$_ =~ s/\n//;
+	$line = $_;
+	if ($_ =~ m/^PER:(.*)METHOD:(.*)STMT:(.*)NOTDIRECTUSE$/) {
+		$perm = $1;
+		$method = $2;
+		$stmt = $3;
+		$directuse = 0;
+	} elsif ($_ =~ m/^PER:(.*)METHOD:(.*)STMT:(.*)$/) {
+		$perm = $1;
+		$method = $2;
+		$stmt = $3;
+		$directuse = 1;
+	}
+	#skip if it's already known that method is checking for the permission
+	if (exists $sinks{$perm}) {
+		if ($method ~~ @{$sinks{$perm}}) {
+			next;
+		}
+	}
+	if ($stmt =~ m/invoke.*<(.*)>\(.*\)$/) {
+		$invokemethod = "<".$1.">";
+	} else {
+		print "!!FLAG STMT NOT INVOKE NOT KNOWN!! $_\n";
+		next;
+	}
+
+	if ($invokemethod =~ m/^<java\./) {
+		print "SKIPPING $line\n";
+		next;
+	}
+
+	@workingset = ();
+	$found = 0;
+	$count = 0;
+	push (@workingset, $invokemethod);
+	foreach (@workingset) {
+		$workingmethod = $_;
+		if (exists $knownPermissionCheck{$workingmethod}) {
+			$found = 1;
+			$sinktype{$perm.$method} = $knownPermissionCheck{$workingmethod};
+			if (! exists $sinks{$perm}) {
+				push (@{$sinks{$perm}}, $method);
+			} elsif (! ($method ~~ @{$sinks{$perm}})) {
+				push (@{$sinks{$perm}}, $method);
+			}
+			@workingset = ();
+		} elsif (exists $lookup{$workingmethod}) {
+			foreach (@{$lookup{$workingmethod}}) {
+				if ($_ =~ m/^<java\./) { 
+					#print "SKIPPING $_\n";
+				} elsif (! ($_ ~~ @workingset)) {
+					push (@workingset, $_)
+				}
+			}
+		}
+		$count++;
+		if ($count % 100 == 0) {
+			print "ATTENTION $count $line\n";
+		}
+	}
+	if ($found == 0) {
+		print "!!FLAG INVOKE NOT SINK!! $_\n";
+	}
+}
+
+#print results
+foreach (keys %sinks) {
+	$p = $_;
+	foreach (@{$sinks{$_}}) {
+		print "PER:$p"."TYPE:".$sinktype{$p.$_}."METHOD:$_\n";
+	}
+}
+

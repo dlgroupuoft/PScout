@@ -1,0 +1,9 @@
+alias runsoot='java -cp ../bin/jasminclasses-2.4.0.jar:../bin/polyglot.jar:../bin/sootclasses-2.4.0.jar:../soot/DumpClass/bin:../soot/IntentWithPermission/bin:../soot/IntentPermissionCheck/bin:.'
+function progress() {
+	analyzed=`wc -l processed | cut -f1 -d' '`
+	total=`wc -l classlist | cut -f1 -d' '`
+	percent=`echo $analyzed / $total | bc -l`
+	echo $analyzed/$total \($percent\)
+}
+alias testsetup='java -cp ../bin/jasminclasses-2.4.0.jar:../bin/polyglot.jar:../bin/sootclasses-2.4.0.jar:../soot/DumpClass/bin:../soot/IntentWithPermission/bin:../soot/IntentPermissionCheck/bin:. dump.DumpClass com.android.internal.telephony.gsm.GSMPhone'
+

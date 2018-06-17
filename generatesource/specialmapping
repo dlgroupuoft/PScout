@@ -1,0 +1,72 @@
+PERMISSION:android.permission.CAMERA
+<android.hardware.Camera: android.hardware.Camera open()>
+<android.hardware.Camera: void native_setup(java.lang.Object)>
+<android.media.MediaRecorder: void setVideoSource(int)>
+PERMISSION:android.permission.INTERNET
+<java.net.DatagramSocket: void <init>(int)>
+<java.net.HttpURLConnection: void <init>(int)>
+<java.net.HttpURLConnection: void connect()>
+<java.net.MulticastSocket: void <init>(int)>
+<java.net.NetworkInterface: void <init>(int)>
+<java.net.ServerSocket: void <init>(int)>
+<java.net.ServerSocket: void bind(java.net.SocketAddress)>
+<java.net.Socket: void <init>(int)>
+<java.net.URL: java.lang.Object getContent()>
+<java.net.URL: java.net.URLConnection openConnection()>
+<java.net.URL: java.io.InputStream openStream()>
+<java.net.URLConnection: void connect()>
+<java.net.URLConnection: java.io.InputStream getInputStream()>
+<org.apache.http.impl.client.DefaultHttpClient: void <init>(int)>
+<org.apache.http.impl.client.DefaultHttpClient: org.apache.http.HttpResponse execute(org.apache.http.client.methods.HttpUriRequest)>
+PERMISSION:android.permission.BACKUP
+<android.provider.Settings$Secure: android.net.Uri getUriFor(java.lang.String)>
+<android.provider.Settings$System: android.net.Uri getUriFor(java.lang.String)>
+PERMISSION:android.permission.ACCESS_DOWNLOAD_MANAGER
+<android.net.Downloads$ById: android.net.Uri getDownloadUri(long)>
+PERMISSION:android.permission.WRITE_CONTACTS
+<com.android.contacts.ContactsListActivity: android.net.Uri getContactUri(int)>
+<com.android.contacts.ContactsListActivity: android.net.Uri getUriToQuery()>
+<com.android.contacts.ContactsListActivity: android.net.Uri getSelectedUri(int)>
+<android.provider.ContactsContract$Contacts: android.net.Uri getLookupUri(long,java.lang.String)>
+PERMISSION:android.permission.WRITE_CALENDAR
+<com.android.calendar.AgendaWindowAdapter: android.net.Uri buildQueryUri(int,int)>
+PERMISSION:android.permission.WRITE_SECURE_SETTINGS
+<android.provider.Settings$Secure: android.net.Uri getUriFor(java.lang.String)>
+PERMISSION:android.permission.READ_CONTACTS
+<com.android.contacts.ContactsListActivity: android.net.Uri getContactUri(int)>
+<com.android.contacts.ContactsListActivity: android.net.Uri getUriToQuery()>
+<com.android.contacts.ContactsListActivity: android.net.Uri getSelectedUri(int)>
+<android.provider.ContactsContract$Contacts: android.net.Uri getLookupUri(long,java.lang.String)>
+PERMISSION:android.permission.WRITE_SETTINGS
+<android.provider.Settings$Secure: android.net.Uri getUriFor(java.lang.String)>
+<android.provider.Settings$System: android.net.Uri getUriFor(java.lang.String)>
+PERMISSION:android.permission.READ_CALENDAR
+<com.android.calendar.AgendaWindowAdapter: android.net.Uri buildQueryUri(int,int)>
+PERMISSION:android.permission.ACCESS_SURFACE_FLINGER
+<android.view.Surface: void closeTransaction()>
+<android.view.Surface: void freezeDisplay(int)>
+<android.view.Surface: void unfreezeDisplay(int)>
+<android.view.Surface: void setOrientation(int,int)>
+<android.view.Surface: void setOrientation(int,int,int)>
+<android.view.SurfaceSession: void <init>()>
+PERMISSION:android.permission.ACCESS_DOWNLOAD_MANAGER
+<android.net.Downloads$ById: android.os.ParcelFileDescriptor openDownload(android.content.Context,long,java.lang.String)>
+<android.net.Downloads$ById: java.io.InputStream openDownloadStream(android.content.Context,long)>
+PERMISSION:android.permission.RECORD_AUDIO
+<android.media.AudioRecord: void <init>(int,int,int,int,int)>
+<android.media.MediaRecorder: void setAudioSource(int)>
+PERMISSION:android.permission.MODIFY_AUDIO_SETTINGS
+<android.media.AudioManager: boolean isBluetoothA2dpOn()>
+<android.media.AudioManager: boolean isWiredHeadsetOn()>
+<android.media.AudioManager: void setMicrophoneMute(boolean)>
+<android.media.AudioManager: void setParameter(java.lang.String,java.lang.String)>
+<android.media.AudioManager: void setParameters(java.lang.String)>
+<android.server.BluetoothA2dpService: boolean checkSinkSuspendState(int)>
+<android.server.BluetoothA2dpService: void handleSinkStateChange(android.bluetooth.BluetoothDevice,int,int)>
+<android.server.BluetoothA2dpService: void onBluetoothEnable()>
+<android.server.BluetoothA2dpService: void onBluetoothDisable()>
+<android.server.BluetoothA2dpService: boolean resumeSink(android.bluetooth.BluetoothDevice)>
+<android.server.BluetoothA2dpService: boolean suspendSink(android.bluetooth.BluetoothDevice)>
+PERMISSION:android.permission.BLUETOOTH
+<android.bluetooth.BluetoothSocket: void initSocketFromFdNative(int)>
+<android.bluetooth.BluetoothSocket: void initSocketNative()>

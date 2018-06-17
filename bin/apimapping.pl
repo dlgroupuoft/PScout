@@ -1,0 +1,548 @@
+#!/usr/bin/perl
+
+use XML::Simple;
+
+my $calltablefilenorpc = "callgraphnorpc";
+my $seedfile = "stringpermissioncheck";
+my $contentseedfile = "contentprovidercheck";
+my $contentseedfile2 = "contentproviderdynamiccheck";
+my $specialmappingfile = "../generatesource/specialmapping";
+my $publishedapifile = "current.xml";
+my $rpcedgefile = "aidlcallgraphedges";
+my $classhierarchyfile = "classhierarchy";
+my $perm_file = "permissions";
+my $msgedgefile = "sendmessagecallgraphedges";
+my $broadcaststickyfile = "broadcaststickycheck";
+my $intentpermissionfile = "intentpermissioncheck";
+my $reachproviderfile = "permissionreachedprovider";
+my $show = 0;
+
+if ($#ARGV + 1 == 1 && $ARGV[0] eq "d") {
+	$show = 1;
+}
+
+#load class information
+open CLASS, "<$classhierarchyfile" or die $!;
+%childhasparent = ();
+%childparenthash = ();
+%isrpcinterface = ();
+%isproviderclass = ();
+%implementsinterface = ();
+%implementsallinterface = ();
+while (<CLASS>) {
+	$_ =~ s/\n//;
+	if ($_ =~ m/^([^,]*),.*SUPER:([^,]*),/) {
+		$childhasparent{$1} = $2;
+	}
+	if ($_ =~ m/^([^,]*),.*INTERFACES:1:android.os.IInterface/) {
+		$isrpcinterface{$1} = 1;
+	}
+	if ($_ =~ m/^([^,]*),.*ISPROVIDER/) {
+		$isproviderclass{$1} = 1;
+	}
+	if ($_ =~ m/^([^,]*),([^,]*),/) {
+		$class = $1;
+		$interfaceline = $2;
+		if ($interfaceline ne "") {
+			@tokens =  split(/:/, $interfaceline);
+			$interfacecount = 0;
+			$count = 0;
+			foreach (@tokens) {
+				if ($_ eq "INTERFACES") {
+				} elsif ($_ =~ m/^([\d]*)$/) {
+					$interfacecount = $1;
+				} else {
+					push (@{$implementsinterface{$class}}, $_);
+					$count++;
+				}
+			}
+			if ($interfacecount != $count) {
+				die "ERROR in parsing interfaces";
+			}
+		}
+	}
+}
+close CLASS;
+foreach $c (keys %childhasparent) {
+	$currentclass = $c;
+	while (exists $childhasparent{$currentclass}) {
+		$childparenthash{$c}{$childhasparent{$currentclass}} = 1;
+		$currentclass = $childhasparent{$currentclass};
+	}
+}
+%childhasparent = ();
+foreach $c (keys %implementsinterface) {
+	foreach (@{$implementsinterface{$c}}) {
+		push (@{$implementsallinterface{$c}}, $_);
+	}
+	foreach $i (@{$implementsallinterface{$c}}) {
+		foreach (@{$implementsinterface{$i}}) {
+			push (@{$implementsallinterface{$c}}, $_);
+		}
+	}
+}
+%implementsinterface = ();
+
+#load 3rd party permissions list
+open PERM, "<$perm_file" or die $!;
+%thirdperm = ();
+while (<PERM>) {
+	$line = $_;
+	$line =~ s/\n$//;
+	$thirdperm{$line} = 1;
+}
+close(PERM);
+
+#load sinks
+%seeds;
+$current_permission;
+$current_type;
+$line;
+open FILE, "<".$seedfile or die $!;
+while (<FILE>) {
+	$line = $_;
+	$line =~ s/\n//;
+	if ($line =~ /^PERMISSION:(.*)/) {
+		$current_permission = $1;
+	} elsif ($line =~ /^TYPE:(.*)/) {
+		$current_type = $1;
+	} else {
+		if (!($line =~ /^\s*$/)) {
+			push (@{$seeds{$current_permission}{$current_type}}, $line) if ($current_permission ne "android.permission.BROADCAST_STICKY");
+		}
+	}
+	
+}
+close(FILE);
+open FILE, "<".$broadcaststickyfile or die $!;
+while (<FILE>) {
+	$line = $_;
+	$line =~ s/\n//;
+	if ($line =~ /^PERMISSION:(.*)/) {
+		$current_permission = $1;
+	} else {
+		if (!($line =~ /^\s*$/)) {
+			push (@{$seeds{$current_permission}{$current_type}}, $line);
+		}
+	}
+	
+}
+close(FILE);
+open FILE, "<".$contentseedfile or die $!;
+$current_type = 2;
+while (<FILE>) {
+	$line = $_;
+	$line =~ s/\n//;
+	if ($line =~ m/^PERMISSION:(.*)/) {
+		$current_permission = $1;
+	} else {
+		if (!($line =~ /^\s*$/)) {
+			push (@{$seeds{$current_permission}{$current_type}}, $line);
+		}
+	}
+}
+close(FILE);
+if (-e $contentseedfile2) {
+	open FILE, "<".$contentseedfile2 or die $!;
+	$current_type = 2;
+	while (<FILE>) {
+		$line = $_;
+		$line =~ s/\n//;
+		if ($line =~ m/^PERMISSION:(.*)/) {
+			$current_permission = $1;
+		} else {
+			if (!($line =~ /^\s*$/)) {
+				push (@{$seeds{$current_permission}{$current_type}}, $line);
+			}
+		}
+	}
+}
+close(FILE);
+open FILE, "<".$intentpermissionfile or die $!;
+$current_type = 2;
+while (<FILE>) {
+	$line = $_;
+	$line =~ s/\n//;
+	if ($line =~ m/^PERMISSION:(.*)/) {
+		$current_permission = $1;
+	} else {
+		if (!($line =~ /^\s*$/)) {
+			push (@{$seeds{$current_permission}{$current_type}}, $line);
+		}
+	}
+}
+close(FILE);
+open FILE, "<".$specialmappingfile or die $!;
+$current_type = 2;
+while (<FILE>) {
+	$line = $_;
+	$line =~ s/\n//;
+	if ($line =~ m/^PERMISSION:(.*)/) {
+		$current_permission = $1;
+	} else {
+		if (!($line =~ /^\s*$/)) {
+			push (@{$seeds{$current_permission}{$current_type}}, $line);
+		}
+	}
+}
+close(FILE);
+
+#load published api
+sub parse_current_txt() {
+	my %current = ();
+	open FILE, "<current.txt" or die $!;
+	$currentpackage = "";
+	$currentclass = "";
+	while (<FILE>) {
+		chomp($_);
+		if ($_ =~ m/^package (.*) {/) {
+			$currentpackage = $1;
+			$current{"package"}{$currentpackage} = 1;
+			#print $currentpackage."\n";
+		} elsif ($_ =~ m/^  .* class ([^ ]*) .*{/) {
+			$currentclass = $1;
+			$current{"package"}{$currentpackage}{"class"}{$currentclass} = 1;
+			#print $currentclass."\n";
+		} elsif ($_ =~ m/^  .* interface ([^ ]*) .*{/) {
+			$currentclass = $1;
+			$current{"package"}{$currentpackage}{"class"}{$currentclass} = 1;
+			#print $currentclass."\n";
+		} elsif ($_ =~ m/^    ctor .* ([^ ]*)\(.*\).*;$/) {
+			$constructor = $1;
+			$current{"package"}{$currentpackage}{"class"}{$currentclass}{"constructor"}{$constructor} = 1;
+			#print $constructor."\n";
+		} elsif ($_ =~ m/^    method .* ([^ ]*)\(.*\).*;$/) {
+			$method = $1;
+			$current{"package"}{$currentpackage}{"class"}{$currentclass}{"method"}{$method} = 1;
+			#print $method."\n";
+		} elsif ($_ =~ m/^    field / || $_ =~ m/}/ || $_ =~ m/^\s*$/ || $_ =~ m/^    enum_constant /) {
+		} else {
+			print $_."\n";
+		}
+	}
+	close FILE;
+	return \%current;
+}
+
+$androidAPI;
+if (-e "current.xml") {
+	$xml = new XML::Simple;
+	$androidAPI = $xml->XMLin($publishedapifile);
+} else {
+	$androidAPI = parse_current_txt();
+}
+
+#load call graphs
+open FILE, "<".$rpcedgefile or die $!;
+%lookup;
+@found;
+$src;
+$tgt;
+while (<FILE>) {
+	$_ =~ s/\n//;
+	if ($_ =~ /^SRC:(.*)TGT:(.*)/) {
+		$src = $1;
+		$tgt = $2; 
+		if (! exists $lookup{$tgt}) {
+			push (@{$lookup{$tgt}}, $src);
+		} elsif (! ($src ~~ @{$lookup{$tgt}})) {
+			push (@{$lookup{$tgt}}, $src);
+		}
+	}
+}
+close(FILE);
+open FILE, "<".$calltablefilenorpc or die $!;
+while (<FILE>) {
+	$_ =~ s/\n//;
+	if ($_ =~ /^SRC:(.*)TGT:(.*)/) {
+		$src = $1;
+		$tgt = $2; 
+		if (! exists $lookup{$tgt}) {
+			push (@{$lookup{$tgt}}, $src);
+		} elsif (! ($src ~~ @{$lookup{$tgt}})) {
+			push (@{$lookup{$tgt}}, $src);
+		}
+	}
+}
+close(FILE);
+open FILE, "<".$msgedgefile or die $!;
+while (<FILE>) {
+	$_ =~ s/\n//;
+	if ($_ =~ /^SRC:(.*)TGT:(.*)/) {
+		$src = $1;
+		$tgt = $2; 
+		if (! exists $lookup{$tgt}) {
+			push (@{$lookup{$tgt}}, $src);
+		} elsif (! ($src ~~ @{$lookup{$tgt}})) {
+			push (@{$lookup{$tgt}}, $src);
+		}
+	}
+}
+close(FILE);
+
+%apiclass;
+open SKIP, "<../generatesource/apiclass" or die $!;
+while (<SKIP>) {
+	$line = $_;
+	$line =~ s/\n//;
+	$apiclass{$line} = 1;
+}
+close(SKIP);
+
+%clearuid;
+open SKIP, "<clearrestoreuid" or die $!;
+while (<SKIP>) {
+	$line = $_;
+	$line =~ s/\n//;
+	if ($line =~ m/^(.*);(.*)$/) {
+		$clearuid{$2}{$1} = 1;
+	}
+}
+close(SKIP);
+
+%reached = ();
+%published = ();
+
+$counts = 0;
+
+%specialmap = ();
+@callers;
+%workingset;
+@workingcallers;
+foreach $permission (keys %seeds) {
+	next if (! defined $thirdperm{$permission});
+	print JUSTAPI "Permission:$permission\n";
+	%workingset = ();
+	@callers = ();
+	$hitmax = 0;
+	foreach $t (keys %{$seeds{$permission}}) {
+		foreach $s (@{$seeds{$permission}{$t}}) {
+			next if (defined $workingset{$s});
+			@workingcallers = ();
+			push (@workingcallers, $s);
+			$workingset{$s}{"rpc"} = 0;
+			$workingset{$s}{"api"} = 0;
+			$count = 0;
+			foreach $i (@workingcallers) {
+				$count++;
+				if ($count > 3000 ) { $hitmax = 1; next; }
+				#if ($count > 200) { $hitmax = 1; next; }
+								
+				#no caller
+				next if (!defined $lookup{$i});
+				
+				if (scalar(@{$lookup{$i}}) > 500) {
+					print "!!! SKIPPING large fan-in targets $i\n";
+					next;
+				}
+				
+				$i =~ m/<(.*)\.([^\.]*): (.*) (.*)\((.*)>/;
+				$ipkg = $1;
+				$iclassShort = $2;
+				$imethodName = $4;
+				$iparam = $5;
+				$ifullclassname = "$ipkg.$iclassShort";
+				$iclassShort =~ s/\$/\./g;
+				
+				#stop at provider class
+				$stop_at_class_but_include_method = 0;
+				$stop_at_sys_class_but_include_other_method = 0;
+				if (defined $isproviderclass{$ifullclassname}) {
+					print "!!! REACHED provider class $ifullclassname\n";
+					$stop_at_class_but_include_method = 1;
+					if ($imethodName =~ m/query/i || $imethodName =~ m/insert/i
+						|| $imethodName =~ m/delete/i || $imethodName =~ m/update/i) {
+						push(@{$reached{$ifullclassname}}, $permission.";".$i);
+					}
+				}
+
+				#special cases
+				next if ($iclassShort eq "IWindowSession" && $imethodName eq "add");
+				next if ($iclassShort eq "WindowManagerService" && $imethodName eq "sendNewConfiguration");
+				next if ($iclassShort eq "SurfaceView" && $imethodName eq "updateWindow");
+				
+				#for each caller methods not already worked on
+				foreach $j (@{$lookup{$i}}) {
+					next if (defined $workingset{$j});
+					
+					$j =~ m/<(.*)\.([^\.]*): (.*) (.*)\((.*)>/;
+					$jpkg = $1;
+					$jclassShort = $2;
+					$jmethodName = $4;
+					$jparam = $5;
+					$jfullclassname = "$jpkg.$jclassShort";
+					$jclassShort =~ s/\$/\./g;
+										
+									
+					next if ($stop_at_class_but_include_method == 1 && $ifullclassname ne $jfullclassname);
+										
+					next if ($jfullclassname eq "android.os.Binder");
+					if ($jmethodName eq "handleMessage" || $jmethodName eq "doHandleMessage") {
+						print "!!! HANDLER $j\n";
+						next;
+					}
+					
+					if ($jfullclassname !~ m/^android\./ && $jfullclassname !~ m/^com\./) {
+						print "!!! SKIPPING NOT android.* and com.* $j\n";
+						next;
+					}
+					
+					if ($jfullclassname =~ m/Activity/ && $jmethodName =~ m/Activity/) {
+						print "!!! SPECIAL Activity\n";
+						next;
+					}
+					if ($jfullclassname =~ m/Activity/ && $jmethodName =~ m/onKeyDown/) {
+						print "!!! SPECIAL onKeyDown\n";
+						next;
+					}
+					if ($jfullclassname =~ m/Context/ && $jmethodName =~ m/registerReceiver/) {
+						print "!!! SPECIAL registerReceiver\n";
+						next;
+					}
+					if ($jfullclassname =~ m/Context/ && $jmethodName =~ m/createService/) {
+						print "!!! SPECIAL createService\n";
+						next;
+					}
+					if ($jfullclassname =~ m/Context/ && $jmethodName =~ m/getSystemService/) {
+						print "!!! SPECIAL getSystemService\n";
+						next;
+					}
+					if ($jmethodName =~ m/<clinit>/) {
+						print "!!! SPECIAL <clinit>\n";
+						next;
+					}
+					
+					$issrcparent = 0;
+					$issrcparent = 1 if (defined $childparenthash{$ifullclassname} && defined $childparenthash{$ifullclassname}{$jfullclassname}
+						&& $imethodName eq $jmethodName);
+						
+					$issrcinterface = 0;
+					$issrcinterface = 1 if (defined $implementsallinterface{$ifullclassname} && $jfullclassname ~~ @{$implementsallinterface{$ifullclassname}}
+						&& $imethodName eq $jmethodName);
+					
+						
+					
+					if (($issrcparent == 1 || $issrcinterface == 1) && $jfullclassname =~ m/^android\./ && $jmethodName =~ m/^on[A-Z]/) {
+						print "!!! CALLBACK PARENT $j\n";
+						next;
+					}
+					
+					if (defined $clearuid{$i} && defined $clearuid{$i}{$j}) {
+						print "!!! CLEADEDURI $j\n";
+						next;
+					}
+										
+					$workingset{$j}{"rpc"} = $workingset{$i}{"rpc"};
+					$workingset{$j}{"api"} = $workingset{$i}{"api"};					
+					$workingset{$j}{"rpc"}++ if (defined $isrpcinterface{$jfullclassname});	
+									
+					if (defined $androidAPI->{"package"}->{$jpkg}
+						&& (defined $androidAPI->{"package"}->{$jpkg}->{"class"}->{$jclassShort} 
+						|| defined $androidAPI->{"package"}->{$jpkg}->{"interface"}->{$jclassShort})
+						|| defined $apiclass{$jfullclassname}) {
+						
+						$ifullclassnamenodollar = $ifullclassname;
+						$ifullclassnamenodollar =~ s/\$/\./g;
+						
+						if (($issrcinterface == 1 || $issrcparent == 1) && $ifullclassnamenodollar !~ m/^android.app.ContextImpl/
+							&& $ifullclassnamenodollar !~ m/^android.os.SystemVibrator/) {
+							print "!!!!! GENERIC PARENTCALL $ifullclassname->$jfullclassname $jmethodName\n";
+							next;
+						}						
+					}	
+						
+					if (defined $androidAPI->{"package"}->{$jpkg}
+						&& defined $androidAPI->{"package"}->{$jpkg}->{"class"}->{$jclassShort} || defined $apiclass{$jfullclassname}) {
+						$workingset{$j}{"api"}++ if ($ifullclassname ne $jfullclassname);				
+						print "!!! REACHED API $j\n" if ($workingset{$j}{"api"} == 1);				
+						print "!!! REACHED SECOND API $j\n" if ($workingset{$j}{"api"} == 2);
+					} 
+					#next if ($workingset{$j}{"rpc"} == 3);
+										
+					push(@workingcallers, $j);
+				}
+			}
+			push(@callers, $_) foreach (@workingcallers);
+		}
+	}
+	
+	if (defined $specialmap{$permission}) {
+		print "!!! specialmapping\n";
+		foreach (@{$specialmap{$permission}}) {
+			push (@callers, $_);
+		}
+	}
+	
+	print "!!!MAXED OUT!!!\n" if ($hitmax == 1);
+	print "Permission:$permission\n";
+	$counts += scalar(@callers);
+	print scalar(@callers)." Callers:\n";
+	foreach (@callers) {
+		print "$_ (".scalar(@{$lookup{$_}}).")\n";
+		if ($show == 1) {
+			print "  $_ (".scalar(@{$lookup{$_}}).")\n" foreach (@{$lookup{$_}});
+		}
+		
+		$j = $_;
+		$j =~ m/<(.*)\.([^\.]*): (.*) (.*)\((.*)>/;
+		$jpkg = $1;
+		$jclassShort = $2;
+		$jmethodName = $4;
+		$jparam = $5;
+		$jfullclassname = "$jpkg.$jclassShort";
+		$jclassShort =~ s/\$/\./g;
+		if (defined $androidAPI->{"package"}->{$jpkg}
+			&& defined $androidAPI->{"package"}->{$jpkg}->{"class"}->{$jclassShort}
+			&& defined $androidAPI->{"package"}->{$jpkg}->{"class"}->{$jclassShort}->{"method"}->{$jmethodName}) {
+			$published{$permission}{$_} = 1;
+		} elsif (defined $androidAPI->{"package"}->{$jpkg}
+			&& defined $androidAPI->{"package"}->{$jpkg}->{"class"}->{$jclassShort}
+			&& defined $androidAPI->{"package"}->{$jpkg}->{"class"}->{$jclassShort}->{"constructor"} && $jmethodName =~m/<init>/) {
+			$published{$permission}{$_} = 1;
+		} elsif (defined $androidAPI->{"package"}->{$jpkg}
+			&& defined $androidAPI->{"package"}->{$jpkg}->{"interface"}->{$jclassShort}
+			&& defined $androidAPI->{"package"}->{$jpkg}->{"interface"}->{$jclassShort}->{"method"}->{$jmethodName}) {
+			$published{$permission}{$_} = 1;
+		} elsif (defined $androidAPI->{"package"}->{$jpkg}
+			&& defined $androidAPI->{"package"}->{$jpkg}->{"interface"}->{$jclassShort}
+			&& defined $androidAPI->{"package"}->{$jpkg}->{"interface"}->{$jclassShort}->{"constructor"} && $jmethodName =~m/<init>/) {
+			$published{$permission}{$_} = 1;
+		}
+	}
+	print "\n";
+}
+
+open REACHED, ">$reachproviderfile" or die $!;
+foreach $k (keys %reached) {
+	print REACHED "$k;$_\n" foreach (@{$reached{$k}});
+}
+close REACHED;
+
+foreach $permission (keys %specialmap) {
+	if (! defined $seeds{$permission} && defined $thirdperm{$permission}) {
+		print "Permission:".$permission."\n".scalar(@{$specialmap{$permission}})." Callers:\n";
+		$counts += scalar(@{$specialmap{$permission}});
+		foreach (@{$specialmap{$permission}}) {
+			$num = scalar(@{$lookup{$_}})+scalar(@{$rpc{$_}});
+			print $_." (".$num.")\n";
+		}
+		print "\n";
+	}
+}
+
+print "# total permission mapping:$counts\n";
+
+$count = 0;
+open JUSTAPI, ">publishedapimapping" or die $!;
+foreach $p (keys %published) {
+	print JUSTAPI "Permission:$p\n";
+	@key = (keys %{$published{$p}});
+	print JUSTAPI scalar(@key)." Callers:\n";
+	print JUSTAPI "$_\n" foreach (@key);
+	$count += scalar(@key);
+}
+close JUSTAPI;
+
+print "# just api permission mapping:$count\n";
+
+
